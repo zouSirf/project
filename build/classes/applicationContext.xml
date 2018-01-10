@@ -1,0 +1,96 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+	<!-- 1.配置SecurityManager -->
+	<bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+		<property name="cacheManager" ref="cacheManager"></property>
+		<property name="authenticator" ref="authenticator"></property>
+		<property name="realms">
+	 		<list>
+	 			<ref bean="jdbcRealm"/>
+	 			<ref bean="secondRealm"/>
+	 		</list>
+	 	</property>
+	 	<!-- 设置记住我的时间 单位为秒-->
+	 	<property name="rememberMeManager.cookie.maxAge" value="10"></property>
+	</bean>
+	<!-- 2.配置cacheManager
+		   需要加入ehcache的jar包以及配置文件
+	 -->
+	 <bean id="cacheManager" class="org.apache.shiro.cache.ehcache.EhCacheManager">
+	 	<property name="cacheManagerConfigFile" value="classpath:ehcache.xml"></property>
+	 </bean>
+	 
+	 
+	 <bean id="authenticator" class="org.apache.shiro.authc.pam.ModularRealmAuthenticator">
+	 	<!-- 设置默认多realm的方式为所有认证通过才成功 -->
+	 	<property name="authenticationStrategy">
+	 		<bean class="org.apache.shiro.authc.pam.AtLeastOneSuccessfulStrategy"></bean>
+	 	</property>
+	 </bean>
+	 
+	 
+	 <!-- 3.配置realm
+	 	   直接配置实现了realm借口的bean
+	  -->
+	 <bean name="jdbcRealm" class="com.eduask.shiro.realms.ShiroRealm">
+	 	<!-- 加密操作 -->
+	 	<property name="credentialsMatcher">
+	 		<bean class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">
+	 			<property name="hashAlgorithmName" value="MD5"></property><!-- 这里加密加的是前台传进来的密码 -->
+	 			<!-- 设置加密次数 -->
+	 			<property name="hashIterations" value="1024"></property>
+	 		</bean>
+	 	</property>
+	 </bean>
+	 
+	 <bean name="secondRealm" class="com.eduask.shiro.realms.SecondRealm">
+	 	<!-- 加密操作 -->
+	 	<property name="credentialsMatcher">
+	 		<bean class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">
+	 			<property name="hashAlgorithmName" value="SHA1"></property>
+	 			<!-- 设置加密次数 -->
+	 			<property name="hashIterations" value="1024"></property>
+	 		</bean>
+	 	</property>
+	 </bean>
+	 
+	<!-- 4.配置LifecycleBeanPostProcessor，可以自动的来调用配置在spring ioc容器中shiro bean的生命周期方法 -->
+	<bean id="lifecycleBeanPostProcessor" class="org.apache.shiro.spring.LifecycleBeanPostProcessor"></bean>
+	<!-- 5.启动ioc容器中使用shiro的注解，但必须在配置了lifecycleBeanPostProcessor之后才能使用 -->
+	<bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator"
+		  depends-on="lifecycleBeanPostProcessor"></bean>
+	<bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor">
+		<property name="securityManager" ref="securityManager"/>
+	</bean>
+	<!-- 6.配置shiroFilter
+		注意：id必须和web.xml中配置的DelegatingFilterProxy的filtername一致
+	            若不一致则会抛出org.springframework.beans.factory.NoSuchBeanDefinitionException异常
+		原因是因为shiro会来ioc容器中查找和filtername名字一致的filter bean    
+	 -->
+	 <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+	 	<property name="securityManager" ref="securityManager"></property>
+	 	<property name="loginUrl" value="/login.jsp"></property>
+	 	<property name="successUrl" value="/list.jsp"></property>
+	 	<!-- 没有权限的页面 -->
+	 	<property name="unauthorizedUrl" value="/unauthorized.jsp"></property>
+	 	<!-- 
+	 		配置哪些页面需要被保护
+	 		以及访问这些页面需要的权限
+	 		anon 可以被匿名访问
+	 		authc 必须认证(登录)后才可以访问的页面
+	 		logout 登出
+	 		roles 角色过滤器
+	 	 -->
+	 	<!-- 设置好的map需要在此引用 -->
+	 	<property name="filterChainDefinitionMap" ref="filterChainDefinitionMap"></property>
+	 	
+	 </bean>
+	 
+	 <!-- 配置一个bean，该bean实际上是一个map，通过实例工厂方法的方式-->
+	 <bean id="filterChainDefinitionMap" factory-bean="filterChainDefinitionMapBuilder" factory-method="buildFilterChainDefinitionMap"></bean>
+	 <bean id="filterChainDefinitionMapBuilder" class="com.eduask.shiro.factory.FilterChainDefinitionMapBuilder"></bean>
+	 
+	 <!-- 注入权限注解的类 -->
+	 <bean id="shiroService" class="com.eduask.services.ShiroService"></bean>
+</beans>
